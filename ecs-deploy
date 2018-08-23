@@ -20,6 +20,7 @@ AWS_CLI=$(which aws)
 AWS_ECS="$AWS_CLI --output json ecs"
 FORCE_NEW_DEPLOYMENT=false
 SKIP_DEPLOYMENTS_CHECK=false
+DEPLOY_LATEST_TASK_DEFINITION=false
 RUN_TASK=false
 
 function usage() {
@@ -55,7 +56,8 @@ Optional arguments:
     --max-definitions            Number of Task Definition Revisions to persist before deregistering oldest revisions.
     --enable-rollback            Rollback task definition if new version is not running before TIMEOUT
     --force-new-deployment       Force a new deployment of the service. Default is false.
-    --use-latest-task-def   Will use the most recently created task definition as it's base, rather than the last used.
+    --use-latest-task-def        Will use the most recently created task definition as it's base, rather than the last used.
+    --deploy-latest-task-def     Will deploy the most recently created task definition and will not create a new task definition.
     --skip-deployments-check     Skip deployments check for services that take too long to drain old tasks
     --run-task                   Run created task now. If you set this, service-name are not needed.
     -v | --verbose               Verbose output
@@ -69,6 +71,10 @@ Examples:
   Simple deployment of a service (Using env vars for AWS settings):
 
     ecs-deploy -c production1 -n doorman-service -i docker.repo.com/doorman:latest
+
+  Updating a service with the most recent task definition
+
+    ecs-deploy -c production1 -n doorman-service --deploy-latest-task-def
 
   All options:
 
@@ -153,7 +159,7 @@ function assertRequiredArgumentsSet() {
         echo "CLUSTER is required. You can pass the value using -c or --cluster"
         exit 7
     fi
-    if [ $IMAGE == false ] && [ $FORCE_NEW_DEPLOYMENT == false ]; then
+    if [ $IMAGE == false ] && [ $FORCE_NEW_DEPLOYMENT == false ] && [ $DEPLOY_LATEST_TASK_DEFINITION == false ]; then
         echo "IMAGE is required. You can pass the value using -i or --image"
         exit 8
     fi
@@ -371,6 +377,10 @@ function updateService() {
     fi
 
     # Update the service
+    if [ $DEPLOY_LATEST_TASK_DEFINITION != false ]; then
+      NEW_TASKDEF=$TASK_DEFINITION_ARN
+    fi
+
     UPDATE=`$AWS_ECS update-service --cluster $CLUSTER --service $SERVICE $DESIRED_COUNT --task-definition $NEW_TASKDEF $DEPLOYMENT_CONFIG`
 
     # Only excepts RUNNING state from services whose desired-count > 0
@@ -565,6 +575,11 @@ if [ "$BASH_SOURCE" == "$0" ]; then
             --use-latest-task-def)
                 USE_MOST_RECENT_TASK_DEFINITION=true
                 ;;
+            --deploy-latest-task-def)
+                DEPLOY_LATEST_TASK_DEFINITION=true
+                # use most recent task definition is implied
+                USE_MOST_RECENT_TASK_DEFINITION=true
+                ;;
             --force-new-deployment)
                 FORCE_NEW_DEPLOYMENT=true
                 ;;
@@ -600,11 +615,20 @@ if [ "$BASH_SOURCE" == "$0" ]; then
         assumeRole
     fi
 
-    # Not required creation of new a task definition
+    # Creation of a new task definition not required
     if [ $FORCE_NEW_DEPLOYMENT == true ]; then
         updateServiceForceNewDeployment
         waitForGreenDeployment
         exit 0
+    fi
+    
+    # No need for new task def also, and hence no need for image name
+    if [ $DEPLOY_LATEST_TASK_DEFINITION == true ]; then
+      getCurrentTaskDefinition
+      echo "Latest task definition: $TASK_DEFINITION_ARN";
+      updateService
+      waitForGreenDeployment
+      exit 0
     fi
 
     # Determine image name
