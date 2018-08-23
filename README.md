@@ -38,8 +38,9 @@ Usage
                                             Max definitions causes all task revisions not matching criteria to be deregistered, even if they're created manually.
                                             Script will only perform deregistration if deployment succeeds.
         --enable-rollback             Rollback task definition if new version is not running before TIMEOUT
-        --use-latest-task-def         Will use the most recently created task definition as it's base, rather than the last used.
         --force-new-deployment        Force a new deployment of the service. Default is false.
+        --use-latest-task-def         Will use the most recently created task definition as it's base, rather than the last used.
+        --deploy-latest-task-def      Will deploy the most recently created task definition and will not create a new task definition. (This option will ignore the -i|--image flag)
         --skip-deployments-check      Skip deployments check for services that take too long to drain old tasks
         --run-task                    Run created task now. If you set this, service-name are not needed.
         -v | --verbose                Verbose output
@@ -54,6 +55,10 @@ Usage
 
         ecs-deploy -c production1 -n doorman-service -i docker.repo.com/doorman:latest
 
+      Updating a service with the most recent task definition
+
+        ecs-deploy -c production1 -n doorman-service --deploy-latest-task-def      
+      
       All options:
 
         ecs-deploy -k ABC123 -s SECRETKEY -r us-east-1 -c production1 -n doorman-service -i docker.repo.com/doorman -m 50 -M 100 -t 240 -D 2 -e CI_TIMESTAMP -v
